@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego de la Granja</title>
+    <!-- Carga de Tailwind CSS para estilos rápidos y responsivos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Importa la fuente Inter de Google Fonts para un texto claro y legible */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f3e6; /* Un color de fondo suave, que evoca la tierra de una granja */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh; /* Asegura que el juego ocupe toda la altura de la pantalla */
+            margin: 0;
+            /* Se eliminó 'overflow: hidden;' para permitir el desplazamiento */
+        }
+        .game-container {
+            /* Estilos para el contenedor principal del juego */
+            background-color: #ffffff; /* Fondo blanco para el área de juego */
+            border-radius: 2rem; /* Esquinas grandes y redondeadas para un aspecto amigable */
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1); /* Sombra sutil para dar profundidad */
+            padding: 2rem; /* Espaciado interno generoso */
+            width: 90%; /* Ancho responsivo, ocupando el 90% del contenedor padre */
+            max-width: 800px; /* Ancho máximo para evitar que sea demasiado grande en pantallas grandes */
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem; /* Espacio entre los elementos del juego */
+            position: relative; /* Necesario para posicionar elementos absolutos como las estrellas de recompensa */
+            overflow-y: auto; /* Permite el desplazamiento vertical dentro del contenedor del juego si el contenido se desborda */
+            max-height: 95vh; /* Limita la altura del contenedor del juego para que no ocupe toda la pantalla y permita margen */
+        }
+        .animal-card {
+            /* Estilos para las tarjetas individuales de los animales */
+            cursor: pointer; /* Indica que es un elemento interactivo */
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; /* Transiciones suaves al interactuar */
+            will-change: transform, box-shadow; /* Sugerencia al navegador para optimizar la animación */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            border-radius: 1rem; /* Esquinas redondeadas para cada tarjeta */
+            aspect-ratio: 1 / 1; /* Hace que las tarjetas sean cuadradas */
+            font-weight: bold;
+            color: #333; /* Color de texto oscuro para buena legibilidad */
+            user-select: none; /* Evita que el texto se pueda seleccionar */
+            -webkit-tap-highlight-color: transparent; /* Elimina el resaltado azul al tocar en dispositivos móviles */
+        }
+        .animal-card:hover {
+            /* Efecto visual al pasar el mouse sobre la tarjeta */
+            transform: translateY(-5px); /* Se eleva ligeramente */
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15); /* Aumenta la sombra */
+        }
+        .animal-card.correct-answer {
+            /* Animación para cuando la respuesta es correcta */
+            animation: bounceAndGlow 0.8s ease-out forwards;
+        }
+        .animal-card.incorrect-answer {
+            /* Animación para cuando la respuesta es incorrecta */
+            animation: shake 0.3s ease-out;
+        }
+        /* Definición de animaciones usando keyframes */
+        @keyframes bounceAndGlow {
+            0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+            50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(76, 209, 55, 0.6); } /* Se agranda un poco y emite un brillo verde */
+            100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+        }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+
+        .reward-star {
+            /* Estilos para las estrellas de recompensa que aparecen */
+            position: absolute;
+            font-size: 3rem; /* Tamaño de la estrella */
+            color: gold; /* Color dorado */
+            animation: fadeOutUp 1s forwards; /* Animación de desvanecimiento hacia arriba */
+            pointer-events: none; /* Permite que los clics pasen a través de la estrella */
+            z-index: 10; /* Asegura que la estrella esté por encima de otros elementos */
+        }
+        @keyframes fadeOutUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-50px); } /* Se desvanece y se mueve hacia arriba */
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Título principal del juego, se actualiza dinámicamente -->
+        <h1 id="game-title" class="text-4xl font-bold text-green-700 mb-4"></h1>
+        <!-- Instrucciones del juego, se actualizan dinámicamente -->
+        <p id="game-instructions" class="text-xl text-gray-700 mb-6"></p>
+
+        <!-- Pantalla de Bienvenida - Visible al inicio -->
+        <div id="welcome-screen" class="game-phase">
+            <button id="start-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-full text-2xl shadow-lg transition duration-300">
+                ¡Empezar a Jugar!
+            </button>
+            <!-- Imagen representativa de una granja. Se recomienda reemplazar con arte real de granja. -->
+            <img src="https://placehold.co/400x200/BDF8BB/000000?text=Escena+de+la+Granja" alt="Farm Scene" class="mx-auto mt-6 rounded-lg shadow-md">
+        </div>
+
+        <!-- Fase de Aprendizaje de Animales - Inicialmente oculta -->
+        <div id="learn-phase" class="game-phase hidden">
+            <div id="animals-grid" class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <!-- Las tarjetas de animales se insertarán aquí dinámicamente mediante JavaScript -->
+            </div>
+        </div>
+
+        <!-- Fase de Adivinar el Sonido - Inicialmente oculta -->
+        <div id="guess-phase" class="game-phase hidden">
+            <!-- Mensaje que indica al niño que escuche el sonido -->
+            <p id="sound-prompt" class="text-2xl font-semibold text-gray-800 mb-6"></p>
+            <div id="guess-grid" class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <!-- Las tarjetas de animales para la fase de adivinanza se insertarán aquí dinámicamente -->
+            </div>
+            <!-- Feedback de la respuesta (correcto/incorrecto) para el usuario -->
+            <p id="guess-feedback" class="text-xl font-bold mt-4"></p>
+        </div>
+
+        <!-- Mensaje de recompensa general, visible al completar fases -->
+        <div id="reward-message" class="text-3xl font-bold text-green-600 my-4 hidden"></div>
+
+        <!-- Controles de Navegación (Botones) -->
+        <div class="flex justify-center gap-4 mt-6">
+            <button id="reset-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-5 rounded-full text-xl shadow-md transition duration-300">
+                Reiniciar
+            </button>
+            <button id="next-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-5 rounded-full text-xl shadow-md transition duration-300" disabled>
+                Siguiente
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Objeto que almacena el estado actual del juego
+        let gameState = {
+            currentPhase: 0, // 0: Bienvenida, 1: Aprender (identificación de animales), 2: Adivinar (reconocimiento auditivo), 3: Fin del juego
+            animalsInteracted: new Set(), // Conjunto para llevar un registro de los animales que el niño ha tocado en la fase de aprendizaje
+            correctGuesses: 0, // Contador de respuestas correctas en la fase de adivinanza
+            totalGuessesNeeded: 3, // Número de respuestas correctas necesarias para avanzar en la fase de adivinanza
+            animals: [ // Array de objetos, cada uno representa un animal con su nombre, sonido simulado, color de tarjeta y un emoji como icono
+                { name: "Vaca", sound: "Muuuu", color: "#E0BBE4", icon: '🐄' },
+                { name: "Chancho", sound: "Oink Oink", color: "#957DAD", icon: '🐖' },
+                { name: "Oveja", sound: "Beee", color: "#D291BC", icon: '🐑' },
+                { name: "Gallo", sound: "Kikirikí", color: "#FFC72C", icon: '🐓' },
+                { name: "Gato", sound: "Miau", color: "#A8DADC", icon: '🐈' },
+                { name: "Caballo", sound: "Hiii, Hiii", color: "#F0B27A", icon: '🐎' }
+            ],
+            speaking: false, // Bandera para evitar que se superpongan múltiples voces de síntesis
+            currentSoundAnimal: null // Almacena el animal cuyo sonido se está reproduciendo en la fase de adivinanza
+        };
+
+        // Referencias a los elementos del DOM (Document Object Model) para interactuar con ellos
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const startButton = document.getElementById('start-button');
+        const learnPhase = document.getElementById('learn-phase');
+        const animalsGrid = document.getElementById('animals-grid');
+        const guessPhase = document.getElementById('guess-phase');
+        const soundPrompt = document.getElementById('sound-prompt');
+        const guessGrid = document.getElementById('guess-grid');
+        const guessFeedback = document.getElementById('guess-feedback');
+        const resetButton = document.getElementById('reset-button');
+        const nextButton = document.getElementById('next-button');
+        const gameTitle = document.getElementById('game-title');
+        const gameInstructions = document.getElementById('game-instructions');
+        const rewardMessage = document.getElementById('reward-message');
+
+        // Configuración de la síntesis de voz (Text-to-Speech)
+        const synth = window.speechSynthesis;
+        let voices = []; // Array para almacenar las voces disponibles en el navegador
+
+        // Función para obtener una voz en español (preferiblemente de España)
+        function getSpanishVoice() {
+            return voices.find(voice => voice.lang === 'es-ES' || voice.lang.startsWith('es'));
+        }
+
+        // Evento que se dispara cuando las voces de síntesis están cargadas
+        synth.onvoiceschanged = () => {
+            voices = synth.getVoices(); // Carga las voces disponibles
+            console.log("Voces cargadas:", voices);
+        };
+
+        // Función principal para reproducir texto como voz
+        function speak(text, callback) {
+            if (gameState.speaking) {
+                // Si ya hay una voz reproduciéndose, ignora la nueva solicitud para evitar interrupciones
+                console.log("Ya está hablando, se ignora:", text);
+                return;
+            }
+            gameState.speaking = true; // Marca que una voz está en reproducción
+            const utterance = new SpeechSynthesisUtterance(text); // Crea una nueva instancia de voz
+            utterance.voice = getSpanishVoice(); // Asigna la voz en español
+            utterance.lang = 'es-ES'; // Asegura que el idioma sea español
+            utterance.rate = 0.9; // Ajusta la velocidad de habla para que sea más clara para los niños
+            utterance.pitch = 1.0; // Tono normal
+
+            // Se ejecuta cuando la voz termina de reproducirse
+            utterance.onend = () => {
+                gameState.speaking = false; // Restablece la bandera de reproducción
+                if (callback) callback(); // Ejecuta una función de devolución de llamada si se proporcionó
+            };
+            // Manejo de errores durante la síntesis de voz
+            utterance.onerror = (event) => {
+                console.error('Error en la síntesis de voz:', event);
+                gameState.speaking = false;
+            };
+            synth.speak(utterance); // Inicia la reproducción de la voz
+        }
+
+        // Función para mostrar una recompensa visual (estrellas) en la posición del elemento objetivo
+        function showReward(targetElement) {
+            const star = document.createElement('div');
+            star.textContent = '🌟'; // Contenido de la estrella (emoji)
+            star.classList.add('reward-star'); // Añade la clase CSS para la animación
+            // Calcula la posición del elemento objetivo para centrar la estrella
+            const rect = targetElement.getBoundingClientRect();
+            star.style.left = `${rect.left + rect.width / 2}px`;
+            star.style.top = `${rect.top + rect.height / 2}px`;
+            document.body.appendChild(star); // Añade la estrella al cuerpo del documento
+
+            setTimeout(() => {
+                star.remove(); // Elimina la estrella después de 1 segundo (duración de la animación)
+            }, 1000);
+        }
+
+        // Función para actualizar la interfaz de usuario según el estado actual del juego
+        function updateUI() {
+            // Primero, oculta todas las fases y limpia mensajes previos
+            welcomeScreen.classList.add('hidden');
+            learnPhase.classList.add('hidden');
+            guessPhase.classList.add('hidden');
+            nextButton.disabled = true; // Deshabilita el botón "Siguiente" por defecto
+            rewardMessage.classList.add('hidden');
+            rewardMessage.textContent = '';
+            guessFeedback.textContent = '';
+
+            // Lógica para mostrar la fase correcta según gameState.currentPhase
+            if (gameState.currentPhase === 0) {
+                // Muestra la pantalla de bienvenida
+                welcomeScreen.classList.remove('hidden');
+                gameTitle.textContent = "¡Bienvenidos a la Granja!";
+                gameInstructions.textContent = "Toca el botón para empezar a jugar y conocer a los animales.";
+            } else if (gameState.currentPhase === 1) {
+                // Muestra la fase de aprendizaje de animales
+                learnPhase.classList.remove('hidden');
+                gameTitle.textContent = "Conoce a los animales";
+                gameInstructions.textContent = "Toca cada animal para escuchar su nombre y su sonido.";
+                renderAnimals(animalsGrid, handleAnimalClick); // Renderiza las tarjetas de animales para esta fase
+
+                // Habilita el botón "Siguiente" si todos los animales han sido interactuados
+                if (gameState.animalsInteracted.size === gameState.animals.length) {
+                    nextButton.disabled = false;
+                    gameInstructions.textContent = "¡Muy bien! ¡Has conocido a todos los animales! Toca 'Siguiente'.";
+                } else {
+                    nextButton.disabled = true;
+                }
+            } else if (gameState.currentPhase === 2) {
+                // Muestra la fase de adivinar el sonido
+                guessPhase.classList.remove('hidden');
+                gameTitle.textContent = "¡Adivina el Sonido!";
+                gameInstructions.textContent = "Escucha el sonido y selecciona al animal correcto.";
+                renderAnimals(guessGrid, handleGuessClick); // Renderiza las tarjetas de animales para adivinar
+                // Si aún no se han completado las adivinanzas necesarias, inicia una nueva ronda de adivinanza
+                if (gameState.correctGuesses < gameState.totalGuessesNeeded) {
+                    startGuessingRound();
+                } else {
+                    nextButton.disabled = false; // Habilita el botón "Siguiente" si se han completado las adivinanzas
+                    gameInstructions.textContent = "¡Has adivinado todos los sonidos! ¡Felicidades! Toca 'Siguiente'.";
+                }
+            } else if (gameState.currentPhase === 3) {
+                // Fin del juego: muestra un mensaje de felicitación
+                gameTitle.textContent = "¡Felicidades, granjero/a!";
+                gameInstructions.textContent = "¡Has completado todas las actividades de la granja! Puedes reiniciar para jugar de nuevo.";
+                nextButton.disabled = true; // Deshabilita el botón "Siguiente" al final del juego
+                rewardMessage.textContent = "¡Increíble trabajo!";
+                rewardMessage.classList.remove('hidden');
+            }
+        }
+
+        // Función para renderizar las tarjetas de animales en un contenedor HTML dado
+        function renderAnimals(container, clickHandler) {
+            container.innerHTML = ''; // Limpia cualquier tarjeta existente en el contenedor
+            gameState.animals.forEach((animal, index) => {
+                const animalCard = document.createElement('div');
+                // Aplica clases de Tailwind para estilo y responsividad
+                animalCard.classList.add(
+                    'animal-card',
+                    'rounded-xl',
+                    'shadow-md',
+                    'relative',
+                    `bg-[${animal.color}]` // Color de fondo dinámico para cada tarjeta
+                );
+                animalCard.style.backgroundColor = animal.color; // Asegura que el color de fondo se aplique
+                animalCard.dataset.index = index; // Almacena el índice del animal para referencia
+                // Contenido HTML de la tarjeta: icono (emoji) y nombre del animal
+                animalCard.innerHTML = `
+                    <div class="animal-icon-container text-6xl mb-2">
+                         ${animal.icon}
+                    </div>
+                    <span class="text-xl font-semibold">${animal.name}</span>
+                `;
+                // Añade un event listener para manejar el clic en la tarjeta
+                animalCard.addEventListener('click', () => clickHandler(animal, animalCard));
+                container.appendChild(animalCard); // Añade la tarjeta al contenedor
+            });
+        }
+
+        // Manejador de eventos cuando se hace clic en un animal en la fase de aprendizaje
+        function handleAnimalClick(animal, cardElement) {
+            if (gameState.speaking) return; // Evita la interacción si una voz está reproduciéndose
+
+            console.log("Clic en:", animal.name);
+            // Reproduce el nombre del animal y su sonido característico
+            speak(`${animal.name}. ${animal.sound}.`, () => {
+                gameState.animalsInteracted.add(animal.name); // Marca el animal como interactuado
+                console.log("Animales interactuados:", gameState.animalsInteracted.size);
+                cardElement.classList.add('correct-answer'); // Añade una animación de "correcto"
+                setTimeout(() => cardElement.classList.remove('correct-answer'), 800); // Elimina la animación después de un tiempo
+                updateUI(); // Actualiza la interfaz para chequear si el botón "Siguiente" debe habilitarse
+            });
+        }
+
+        // Inicia una nueva ronda en la fase de adivinanza
+        function startGuessingRound() {
+            if (gameState.speaking) return;
+
+            // Selecciona un animal aleatorio para la adivinanza
+            const randomIndex = Math.floor(Math.random() * gameState.animals.length);
+            gameState.currentSoundAnimal = gameState.animals[randomIndex];
+
+            soundPrompt.textContent = "Escucha el sonido..."; // Muestra un mensaje mientras se reproduce el sonido
+            // Reproduce el sonido del animal y luego pregunta al niño
+            speak(`${gameState.currentSoundAnimal.sound}. ¿Qué animal hace este sonido?`, () => {
+                 soundPrompt.textContent = "¿Qué animal hace este sonido?";
+            });
+            guessFeedback.textContent = ''; // Limpia cualquier feedback de la ronda anterior
+        }
+
+        // Manejador de eventos cuando se hace clic en un animal en la fase de adivinanza
+        function handleGuessClick(animal, cardElement) {
+            if (gameState.speaking || !gameState.currentSoundAnimal) return; // Evita la interacción si está hablando o no hay un sonido activo
+
+            if (animal.name === gameState.currentSoundAnimal.name) {
+                // Si la respuesta es correcta
+                gameState.correctGuesses++; // Incrementa el contador de aciertos
+                guessFeedback.textContent = `¡Muy bien! ¡Es el ${animal.name}!`; // Muestra mensaje de éxito
+                guessFeedback.classList.remove('text-red-600'); // Asegura el color verde para el feedback
+                guessFeedback.classList.add('text-green-600');
+                showReward(cardElement); // Muestra la recompensa visual (estrellas)
+                speak("¡Excelente! Has adivinado correctamente.", () => {
+                    cardElement.classList.add('correct-answer'); // Añade animación de "correcto"
+                    setTimeout(() => {
+                        cardElement.classList.remove('correct-answer');
+                        if (gameState.correctGuesses < gameState.totalGuessesNeeded) {
+                            startGuessingRound(); // Inicia una nueva ronda si aún se necesitan más aciertos
+                        }
+                        updateUI(); // Actualiza la UI (posiblemente habilitando el botón "Siguiente")
+                    }, 800);
+                });
+            } else {
+                // Si la respuesta es incorrecta
+                guessFeedback.textContent = `¡Ups! Inténtalo de nuevo.`; // Muestra mensaje de error
+                guessFeedback.classList.remove('text-green-600'); // Asegura el color rojo para el feedback
+                guessFeedback.classList.add('text-red-600');
+                cardElement.classList.add('incorrect-answer'); // Añade animación de "incorrecto"
+                speak(`No, ese no es. Inténtalo de nuevo.`, () => {
+                    setTimeout(() => {
+                        cardElement.classList.remove('incorrect-answer');
+                    }, 300);
+                });
+            }
+        }
+
+        // Listeners de eventos para los botones principales
+        startButton.addEventListener('click', () => {
+            gameState.currentPhase = 1; // Cambia a la fase de aprendizaje
+            updateUI(); // Actualiza la interfaz
+        });
+
+        nextButton.addEventListener('click', () => {
+            if (!nextButton.disabled) { // Solo si el botón "Siguiente" está habilitado
+                gameState.currentPhase++; // Avanza a la siguiente fase
+                // Restablece el estado necesario para la nueva fase
+                if (gameState.currentPhase === 2) {
+                    gameState.correctGuesses = 0; // Reinicia los aciertos para la fase de adivinanza
+                }
+                updateUI(); // Actualiza la interfaz
+            }
+        });
+
+        resetButton.addEventListener('click', () => {
+            // Restablece todo el estado del juego a sus valores iniciales
+            gameState = {
+                currentPhase: 0,
+                animalsInteracted: new Set(),
+                correctGuesses: 0,
+                totalGuessesNeeded: 3,
+                animals: [
+                    { name: "Vaca", sound: "Muuuu", color: "#E0BBE4", icon: '🐄' },
+                    { name: "Chancho", sound: "Oink Oink", color: "#957DAD", icon: '🐖' },
+                    { name: "Oveja", sound: "Beee", color: "#D291BC", icon: '🐑' },
+                    { name: "Gallo", sound: "Kikirikí", color: "#FFC72C", icon: '🐓' },
+                    { name: "Gato", sound: "Miau", color: "#A8DADC", icon: '🐈' },
+                    { name: "Caballo", sound: "Hiii, Hiii", color: "#F0B27A", icon: '🐎' }
+                ],
+                speaking: false,
+                currentSoundAnimal: null
+            };
+            synth.cancel(); // Detiene cualquier voz en curso
+            updateUI(); // Actualiza la interfaz a la pantalla de bienvenida
+        });
+
+        // Configuración inicial de la UI cuando la ventana se ha cargado completamente
+        window.onload = () => {
+            updateUI();
+            // Asegura que las voces de síntesis estén cargadas; importante para algunos navegadores
+            if (synth.getVoices().length === 0) {
+                synth.onvoiceschanged = () => {
+                    voices = synth.getVoices();
+                    updateUI(); // Vuelve a actualizar la UI si las voces se cargan después
+                };
+            } else {
+                voices = synth.getVoices();
+            }
+        };
+    </script>
+</body>
+</html>
